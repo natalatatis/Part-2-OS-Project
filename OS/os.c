@@ -8,21 +8,13 @@
 
 /* Addresses of the processes and their stacks */
 #if defined(TARGET_QEMU)
-
-/* For QEMU (linked inside kernel) */
-extern uint8_t p1_start;
-extern uint8_t p2_start;
-
-#define P1_ENTRY ((uint32_t)&p1_start)
-#define P2_ENTRY ((uint32_t)&p2_start)
-
-/* Stacks must NOT overlap kernel or processes */
-#define P1_STACK_TOP 0x0001C000u
-#define P2_STACK_TOP 0x0001D000u
+#define P1_ENTRY     0x00100000u
+#define P2_ENTRY     0x00200000u
+#define P1_STACK_TOP 0x00112000u
+#define P2_STACK_TOP 0x00212000u
 
 #elif defined(TARGET_BEAGLE)
 
-/* For Beagle (external binaries loaded in RAM) */
 #define P1_ENTRY     0x82100000u
 #define P2_ENTRY     0x82200000u
 
@@ -32,19 +24,6 @@ extern uint8_t p2_start;
 #else
 #error "Define TARGET_QEMU or TARGET_BEAGLE"
 #endif
-
-/*#if defined(TARGET_BEAGLE)
-    #define P1_ENTRY     0x82100000u
-    #define P2_ENTRY     0x82200000u
-    #define P1_STACK_TOP 0x82112000u
-    #define P2_STACK_TOP 0x82212000u
-#elif defined(TARGET_QEMU)
-    #define P1_ENTRY     0x00100000u
-    #define P2_ENTRY     0x00200000u
-    #define P1_STACK_TOP 0x00112000u
-    #define P2_STACK_TOP 0x00212000u
-#endif
-*/
 
 pcb_t  pcb_array[NUM_PROCS];
 pcb_t *current_proc = NULL;
@@ -249,10 +228,8 @@ static void setup_initial_stack(pcb_t *pcb, unsigned int stack_top, unsigned int
     pcb->pc    = entry_point;
     pcb->lr    = entry_point;
 
-#if defined(TARGET_QEMU)
-    pcb->cpsr = 0x10u;  /* USER mode */
-#elif defined(TARGET_BEAGLE)
-    pcb->cpsr = 0x13u;  /* SVC mode  */
+#if defined(TARGET_QEMU) || defined(TARGET_BEAGLE)
+    pcb->cpsr = 0x10u;  /* USR mode for both */
 #endif
 
     pcb->state = READY;
@@ -312,9 +289,8 @@ void timer_irq_handler(void) {
         next_proc = (current_proc->pid == 1)
                   ? &pcb_array[1]
                   : &pcb_array[0];
-    } else {
-        next_proc = current_proc;
-    }
 
-    current_proc = next_proc;
+        /* Correctly update current_proc for context switching */
+        current_proc = next_proc;
+    }
 }
