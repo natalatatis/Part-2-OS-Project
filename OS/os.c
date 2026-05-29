@@ -3,6 +3,7 @@
 #include "os.h"
 #include "pcb.h"
 #include "os_api.h"
+#include "syscall.h"
 
 #define NUM_PROCS 2
 
@@ -292,5 +293,54 @@ void timer_irq_handler(void) {
 
         /* Correctly update current_proc for context switching */
         current_proc = next_proc;
+    }
+}
+
+// SYSCALL HANDLER
+void syscall_handler(uint32_t *stack_frame)
+{
+    uint32_t syscall_id = stack_frame[0];
+    uint32_t arg1 = stack_frame[1];
+    uint32_t arg2 = stack_frame[2];
+    uint32_t arg3 = stack_frame[3];
+
+    switch (syscall_id)
+    {
+        case SYS_YIELD:
+        {
+            os_uart_puts("[SYS_YIELD]\n");
+
+            next_proc = (current_proc->pid == 1)
+                      ? &pcb_array[1]
+                      : &pcb_array[0];
+
+            stack_frame[0] = 0;
+            break;
+        }
+
+        case SYS_WRITE:
+        {
+            int fd = (int)arg1;
+            const char *buf = (const char *)arg2;
+            uint32_t len = arg3;
+
+            if (fd != 1) {
+                stack_frame[0] = (uint32_t)-2;
+                break;
+            }
+
+            for (uint32_t i = 0; i < len; i++) {
+                os_uart_putc(buf[i]);
+            }
+
+            stack_frame[0] = (int32_t)len;
+            break;
+        }
+
+        default:
+        {
+            stack_frame[0] = (uint32_t)-1;
+            break;
+        }
     }
 }

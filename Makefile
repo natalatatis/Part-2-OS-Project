@@ -33,11 +33,13 @@ _build_os_beagle: $(BUILD)
 	$(OBJCOPY) -O binary $(BUILD)/kernel.elf $(BUILD)/kernel.bin
 
 _build_p1_beagle: $(BUILD)
-	$(CC) -c $(P1)/root.s    $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_root.o
-	$(CC) -c $(P1)/main.c    $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1.o
-	$(CC) -c $(LIB)/stdio.c  $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_stdio.o
-	$(CC) -c $(LIB)/string.c $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_string.o
-	$(CC) -c $(LIB)/io.c     $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_io.o
+	$(CC) -c $(P1)/root.s       $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_root.o
+	$(CC) -c $(P1)/main.c       $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1.o
+
+	$(CC) -c $(LIB)/stdio.c     $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_stdio.o
+	$(CC) -c $(LIB)/string.c    $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_string.o
+	$(CC) -c $(LIB)/io.c        $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_io.o
+	$(CC) -c $(LIB)/syscall.c   $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p1_syscall.o
 
 	$(LD) -T $(P1)/p1.ld \
 		$(BUILD)/p1_root.o \
@@ -45,17 +47,19 @@ _build_p1_beagle: $(BUILD)
 		$(BUILD)/p1_stdio.o \
 		$(BUILD)/p1_string.o \
 		$(BUILD)/p1_io.o \
+		$(BUILD)/p1_syscall.o \
 		-o $(BUILD)/p1.elf
 
 	$(OBJCOPY) -O binary $(BUILD)/p1.elf $(BUILD)/p1.bin
 
-
 _build_p2_beagle: $(BUILD)
-	$(CC) -c $(P2)/root.s    $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_root.o
-	$(CC) -c $(P2)/main.c    $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2.o
-	$(CC) -c $(LIB)/stdio.c  $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_stdio.o
-	$(CC) -c $(LIB)/string.c $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_string.o
-	$(CC) -c $(LIB)/io.c     $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_io.o
+	$(CC) -c $(P2)/root.s       $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_root.o
+	$(CC) -c $(P2)/main.c       $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2.o
+
+	$(CC) -c $(LIB)/stdio.c     $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_stdio.o
+	$(CC) -c $(LIB)/string.c    $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_string.o
+	$(CC) -c $(LIB)/io.c        $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_io.o
+	$(CC) -c $(LIB)/syscall.c   $(CFLAGS) -DTARGET_BEAGLE -mcpu=cortex-a8 -marm -o $(BUILD)/p2_syscall.o
 
 	$(LD) -T $(P2)/p2.ld \
 		$(BUILD)/p2_root.o \
@@ -63,6 +67,7 @@ _build_p2_beagle: $(BUILD)
 		$(BUILD)/p2_stdio.o \
 		$(BUILD)/p2_string.o \
 		$(BUILD)/p2_io.o \
+		$(BUILD)/p2_syscall.o \
 		-o $(BUILD)/p2.elf
 
 	$(OBJCOPY) -O binary $(BUILD)/p2.elf $(BUILD)/p2.bin

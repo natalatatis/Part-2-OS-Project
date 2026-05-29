@@ -20,7 +20,10 @@
     .extern __bss_end__
     .extern __os_stack_top
     .extern __irq_stack_top
+    .extern __svc_stack_top
     .extern os_debug_dump_pcb
+
+    .extern syscall_handler
 
     .equ PCB_PID,   0
     .equ PCB_SP,    4
@@ -224,7 +227,25 @@ undefined_handler:
     pop  {r0, lr}
     b hang
 
+// Saves registers and goes to syscall
 swi_handler:
+
+    mov r12, sp
+
+    ldr sp, =__svc_stack_top
+
+    stmfd sp!, {r0-r3, r12, lr}
+
+    mov r0, sp
+    bl syscall_handler
+
+    ldmfd sp!, {r0-r3, r12, lr}
+
+    mov sp, r12
+
+    movs pc, lr
+
+
 prefetch_handler:
 data_handler:
 fiq_handler:
