@@ -288,11 +288,28 @@ void timer_irq_handler(void) {
     if (tick_count >= quantum_ticks) {
         tick_count = 0;
 
-        next_proc = (current_proc->pid == 1)
-                  ? &pcb_array[1]
-                  : &pcb_array[0];
+        int current_idx = current_proc->pid - 1;
+        int num_procs = 2;
+        int next_idx = current_idx;
 
-        /* Correctly update current_proc for context switching */
+        for (int i = 1; i <= num_procs; i++) {
+            int candidate = current_idx + i;
+            if (candidate >= num_procs)
+                candidate -= num_procs;   
+
+            if (pcb_array[candidate].state != TERMINATED) {
+                next_idx = candidate;
+                break;
+            }
+        }
+
+        if (pcb_array[next_idx].state == TERMINATED) {
+            os_uart_puts("[SCHEDULER] All processes terminated.\n");
+            next_proc = current_proc;
+            return;
+        }
+
+        next_proc = &pcb_array[next_idx];
         current_proc = next_proc;
     }
 }
