@@ -29,6 +29,7 @@
 pcb_t  pcb_array[NUM_PROCS];
 pcb_t *current_proc = NULL;
 pcb_t *next_proc    = NULL;
+volatile int syscall_switch_requested = 0;
 
 /* Number of timer interrupts per second */
 static uint32_t timer_hz = 1;
@@ -308,13 +309,52 @@ void syscall_handler(uint32_t *stack_frame)
     {
         case SYS_YIELD:
         {
-            os_uart_puts("[SYS_YIELD]\n");
+            pcb_t *target = (current_proc == &pcb_array[0]) ? &pcb_array[1] : &pcb_array[0];
 
-            next_proc = (current_proc->pid == 1)
-                      ? &pcb_array[1]
-                      : &pcb_array[0];
+            // Only switch if the target hasn't exited
+            if (target->state != TERMINATED) {
+                next_proc = target;
+                
+                // Ensure the current process is marked as READY before switching
+                current_proc->state = READY;
+                
+                os_uart_puts("[SWITCHED TO ");
+                print_dec(next_proc->pid);
+                os_uart_puts("]\n");
+                
+                syscall_switch_requested = 1;
+            } else {
+                os_uart_puts("[YIELD: Target EXITED, continuing...]\n");
+            }
 
-            stack_frame[0] = 0;
+            stack_frame[0] = 0; 
+            break;
+        }
+
+        case SYS_EXIT:
+        {
+            current_proc->state = TERMINATED;
+
+            os_uart_puts("[SYS_EXIT PID=");
+            print_dec(current_proc->pid);
+            os_uart_puts("]\n");
+
+            os_uart_puts("P1 state=");
+            print_dec(pcb_array[0].state);
+            os_uart_puts(" P2 state=");
+            print_dec(pcb_array[1].state);
+            os_uart_puts("\n");
+            
+            pcb_t *next = (current_proc == &pcb_array[0]) ? &pcb_array[1] : &pcb_array[0];
+
+            // This will evaluate to FALSE if next->state is 2
+            if (next->state != TERMINATED) {
+                next_proc = next;
+                syscall_switch_requested = 1;
+            } else {
+                os_uart_puts("All processes terminated. System Halted.\n");
+                while(1); 
+            }
             break;
         }
 
@@ -332,7 +372,6 @@ void syscall_handler(uint32_t *stack_frame)
             for (uint32_t i = 0; i < len; i++) {
                 os_uart_putc(buf[i]);
             }
-
             stack_frame[0] = (int32_t)len;
             break;
         }

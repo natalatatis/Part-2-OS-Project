@@ -5,7 +5,8 @@
 // States
 typedef enum{
     READY, 
-    RUNNING
+    RUNNING,
+    TERMINATED
 } proc_state_t;
 
 typedef struct PCB{

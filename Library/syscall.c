@@ -1,5 +1,6 @@
 #include "syscall.h"
 
+// YIELD voluntarily gives its "turn"
 int sys_yield(void)
 {
     int ret;
