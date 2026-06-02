@@ -8,14 +8,18 @@ int p1_main(void)
     int n = 0;
     int counter = 0;
     int prints = 0;
-    int total_cycles = 0; // Track total sets of prints
+    int total_cycles = 0;
+
+    static const char msg[] = ">>> SYS_WRITE from P1 <<<\n";
 
     while (1)
     {
         counter++;
+
         if (counter >= 50000000)
         {
             PRINT("----FROM P1: %d\n", n);
+
             n = (n + 1) % 10;
             prints++;
             counter = 0;
@@ -24,11 +28,16 @@ int p1_main(void)
             {
                 prints = 0;
                 total_cycles++;
-                
-                // EXIT CONDITION: Exit after 3 cycles
-                if (total_cycles >= 3) {
+
+                /* Test SYS_WRITE */
+                int rc = sys_write(99, msg, sizeof(msg) - 1);
+
+                PRINT("sys_write returned %d\n", rc);
+
+                if (total_cycles >= 3)
+                {
                     PRINT("P1 exiting now...\n");
-                    sys_exit(0); 
+                    sys_exit(0);
                 }
 
                 PRINT("P1 before yield\n");

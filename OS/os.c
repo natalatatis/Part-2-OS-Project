@@ -381,15 +381,30 @@ void syscall_handler(uint32_t *stack_frame)
             const char *buf = (const char *)arg2;
             uint32_t len = arg3;
 
-            if (fd != 1) {
+            if (fd != 1)
+            {
                 stack_frame[0] = (uint32_t)-2;
                 break;
             }
 
-            for (uint32_t i = 0; i < len; i++) {
+            if (buf == NULL)
+            {
+                stack_frame[0] = (uint32_t)-3;
+                break;
+            }
+
+            if (len > 1024)
+            {
+                stack_frame[0] = (uint32_t)-2;
+                break;
+            }
+
+            for (uint32_t i = 0; i < len; i++)
+            {
                 os_uart_putc(buf[i]);
             }
-            stack_frame[0] = (int32_t)len;
+
+            stack_frame[0] = len;
             break;
         }
 
