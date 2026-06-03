@@ -23,13 +23,19 @@
     .extern __os_stack_top
     .extern __irq_stack_top
 
-    .equ PCB_PID,   0
-    .equ PCB_SP,    4
-    .equ PCB_PC,    8
-    .equ PCB_LR,    12
-    .equ PCB_R0,    16
-    .equ PCB_CPSR,  68
-    .equ PCB_STATE, 72
+    .equ PCB_PID,        0
+    .equ PCB_STATE,      4
+    .equ PCB_SP,         8
+    .equ PCB_PC,         12
+    .equ PCB_LR,         16
+    .equ PCB_R0,         20
+    .equ PCB_CPSR,       72
+    .equ PCB_SYSCALL_ID, 76
+    .equ PCB_SYSCALL_RC, 80
+    .equ PCB_FAULT_TYPE, 84
+    .equ PCB_FAULT_ADDR, 88
+    .equ PCB_TERM_REASON,92
+    .equ PCB_EXIT_CODE,  96
 
     .equ STATE_READY,   0
     .equ STATE_RUNNING, 1
@@ -75,6 +81,13 @@ reset_handler:
     orr r0, r0, #0x13
     msr cpsr_c, r0
     ldr sp, =__os_stack_top
+
+    // Abort mode stack
+    mrs r0, cpsr
+    bic r0, r0, #0x1F
+    orr r0, r0, #0x17
+    msr cpsr_c, r0
+    ldr sp, =__irq_stack_top
 
     // Clear .bss
     ldr r0, =__bss_start__
@@ -522,8 +535,173 @@ undefined_handler:
     pop  {r0, lr}
     b hang
 
+// ============================================================
+// prefetch_abort_handler — instruction fetch fault from USR
 prefetch_handler:
+    sub  lr, lr, #4             // adjust to faulting instruction
+    stmfd sp!, {r0-r12, lr}
+
+    // Save context into current_proc 
+    ldr  r0, =current_proc
+    ldr  r0, [r0]
+    cmp  r0, #0
+    beq  .Lpf_no_save
+
+    add  r2, r0, #PCB_R0
+    ldr r1, [sp, #0];  str r1, [r2, #0]
+    ldr r1, [sp, #4];  str r1, [r2, #4]
+    ldr r1, [sp, #8];  str r1, [r2, #8]
+    ldr r1, [sp, #12]; str r1, [r2, #12]
+    ldr r1, [sp, #16]; str r1, [r2, #16]
+    ldr r1, [sp, #20]; str r1, [r2, #20]
+    ldr r1, [sp, #24]; str r1, [r2, #24]
+    ldr r1, [sp, #28]; str r1, [r2, #28]
+    ldr r1, [sp, #32]; str r1, [r2, #32]
+    ldr r1, [sp, #36]; str r1, [r2, #36]
+    ldr r1, [sp, #40]; str r1, [r2, #40]
+    ldr r1, [sp, #44]; str r1, [r2, #44]
+    ldr r1, [sp, #48]; str r1, [r2, #48]
+
+    ldr  r1, [sp, #52]        
+    str  r1, [r0, #PCB_PC]
+
+    mrs  r3, cpsr
+    bic  r2, r3, #0x1F
+    orr  r2, r2, #MODE_SYS
+    msr  cpsr_c, r2
+    str  sp, [r0, #PCB_SP]
+    str  lr, [r0, #PCB_LR]
+    msr  cpsr_c, r3
+
+    mrs  r1, spsr
+    str  r1, [r0, #PCB_CPSR]
+
+    // TRACE 6: USER_TO_KERNEL reason=fault type=prefetch
+    push {r0}
+    ldr  r0, =msg_u2k_prefix
+    bl   os_uart_puts
+    pop  {r0}
+    push {r0}
+    ldr  r0, [r0, #PCB_PID]
+    bl   print_dec
+    pop  {r0}
+    push {r0}
+    ldr  r0, =msg_reason_fault_prefetch
+    bl   os_uart_puts
+    pop  {r0}
+
+.Lpf_no_save:
+    // Call C fault classifier (mode=0 → prefetch)
+    and  r4, sp, #4
+    sub  sp, sp, r4
+    push {r4, lr}
+    mov  r0, #0
+    bl   fault_handler
+    pop  {r4, lr}
+    add  sp, sp, r4
+
+    // TRACE 7: KERNEL_TO_USER reason=fault_recovery
+    ldr  r0, =next_proc
+    ldr  r5, [r0]               // r5 = next PCB
+    push {r5}
+    ldr  r0, =msg_k2u_prefix
+    bl   os_uart_puts
+    pop  {r5}
+    push {r5}
+    ldr  r0, [r5, #PCB_PID]
+    bl   print_dec
+    pop  {r5}
+    push {r5}
+    ldr  r0, =msg_reason_fault_recovery
+    bl   os_uart_puts
+    pop  {r5}
+
+    add  sp, sp, #56
+    b    restore_process
+
+
+// ==================================================
+// data_abort_handler — data access fault from USR
 data_handler:
+    sub  lr, lr, #8             // adjust to faulting instruction
+    stmfd sp!, {r0-r12, lr}
+
+    ldr  r0, =current_proc
+    ldr  r0, [r0]
+    cmp  r0, #0
+    beq  .Lda_no_save
+
+    add  r2, r0, #PCB_R0
+    ldr r1, [sp, #0];  str r1, [r2, #0]
+    ldr r1, [sp, #4];  str r1, [r2, #4]
+    ldr r1, [sp, #8];  str r1, [r2, #8]
+    ldr r1, [sp, #12]; str r1, [r2, #12]
+    ldr r1, [sp, #16]; str r1, [r2, #16]
+    ldr r1, [sp, #20]; str r1, [r2, #20]
+    ldr r1, [sp, #24]; str r1, [r2, #24]
+    ldr r1, [sp, #28]; str r1, [r2, #28]
+    ldr r1, [sp, #32]; str r1, [r2, #32]
+    ldr r1, [sp, #36]; str r1, [r2, #36]
+    ldr r1, [sp, #40]; str r1, [r2, #40]
+    ldr r1, [sp, #44]; str r1, [r2, #44]
+    ldr r1, [sp, #48]; str r1, [r2, #48]
+
+    ldr  r1, [sp, #52]
+    str  r1, [r0, #PCB_PC]
+
+    mrs  r3, cpsr
+    bic  r2, r3, #0x1F
+    orr  r2, r2, #MODE_SYS
+    msr  cpsr_c, r2
+    str  sp, [r0, #PCB_SP]
+    str  lr, [r0, #PCB_LR]
+    msr  cpsr_c, r3
+
+    mrs  r1, spsr
+    str  r1, [r0, #PCB_CPSR]
+
+    // USER_TO_KERNEL reason=fault type=data 
+    push {r0}
+    ldr  r0, =msg_u2k_prefix
+    bl   os_uart_puts
+    pop  {r0}
+    push {r0}
+    ldr  r0, [r0, #PCB_PID]
+    bl   print_dec
+    pop  {r0}
+    push {r0}
+    ldr  r0, =msg_reason_fault_data
+    bl   os_uart_puts
+    pop  {r0}
+
+.Lda_no_save:
+    and  r4, sp, #4
+    sub  sp, sp, r4
+    push {r4, lr}
+    mov  r0, #1
+    bl   fault_handler          // mode=1 → data abort
+    pop  {r4, lr}
+    add  sp, sp, r4
+
+    //  TRACE 7 
+    ldr  r0, =next_proc
+    ldr  r5, [r0]
+    push {r5}
+    ldr  r0, =msg_k2u_prefix
+    bl   os_uart_puts
+    pop  {r5}
+    push {r5}
+    ldr  r0, [r5, #PCB_PID]
+    bl   print_dec
+    pop  {r5}
+    push {r5}
+    ldr  r0, =msg_reason_fault_recovery
+    bl   os_uart_puts
+    pop  {r5}
+
+
+    add  sp, sp, #56
+    b    restore_process
 fiq_handler:
     b hang
 
@@ -587,6 +765,15 @@ msg_newline:
 
 msg_minus:
     .asciz "-"
+
+msg_reason_fault_prefetch:
+    .asciz " reason=fault type=prefetch\n"
+
+msg_reason_fault_data:
+    .asciz " reason=fault type=data\n"
+
+msg_reason_fault_recovery:
+    .asciz " reason=fault_recovery\n"
 
 // ============================================================
 // BSS — print_dec scratch buffer (11 bytes: max 10 digits + null)

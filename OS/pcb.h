@@ -9,9 +9,30 @@ typedef enum{
     TERMINATED
 } proc_state_t;
 
+// Fault classification
+typedef enum{
+    FAULT_NONE = 0,
+    FAULT_PREFETCH,
+    FAULT_DATA_INVALID,
+    FAULT_DATA_PERMISSION,
+    FAULT_DATA_ALIGNMENT,
+    FAULT_UNDEFINED,
+} fault_type_t;
+
+// Termination reason
+typedef enum{
+    TERM_NONE = 0,
+    TERM_EXIT,
+    TERM_FAULT,
+} term_reason_t;
+
+
 typedef struct PCB{
     // Process ID
     int pid;
+    // State
+    proc_state_t state;
+
     // Stack pointer
     unsigned int sp;
     // Program counter
@@ -22,8 +43,20 @@ typedef struct PCB{
     unsigned int registers[13];
     // Status register
     unsigned int cpsr;
-    // State
-    proc_state_t state;
+
+    // syscall id
+    int syscall_id;
+    //return value
+    int syscall_rc;
+
+    // Fault type
+    fault_type_t fault_type;
+    // Fault address register
+    unsigned int fault_addr;
+    // Termination reason
+    term_reason_t term_reason;
+    // Exit code
+    int exit_code;
 
 } pcb_t;
 

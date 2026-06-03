@@ -45,6 +45,8 @@ static uint32_t seconds_to_ticks(uint32_t seconds) {
     return seconds * timer_hz;
 }
 
+void schedule_next(void);
+
 extern void PUT32(uint32_t addr, uint32_t value);
 extern uint32_t GET32(uint32_t addr);
 extern void enable_irq(void);
@@ -231,12 +233,23 @@ static void setup_initial_stack(pcb_t *pcb, unsigned int stack_top, unsigned int
     pcb->lr    = entry_point;
 
 #if defined(TARGET_QEMU) || defined(TARGET_BEAGLE)
-    pcb->cpsr = 0x10u;  /* USR mode for both */
+    pcb->cpsr = 0x10u;
 #endif
 
     pcb->state = READY;
-}
 
+    // Syscall transient state — cleared until first syscall
+    pcb->syscall_id = -1;
+    pcb->syscall_rc = 0;
+
+    // Fault info — no fault has occurred yet
+    pcb->fault_type  = FAULT_NONE;
+    pcb->fault_addr  = 0;
+
+    // Termination — process is alive, no exit yet
+    pcb->term_reason = TERM_NONE;
+    pcb->exit_code   = 0;
+}
 /* ============================================================
  * Main
  * ============================================================ */
@@ -414,4 +427,88 @@ void syscall_handler(uint32_t *stack_frame)
             break;
         }
     }
+}
+
+
+// Fault classification — called from assembly abort handlers
+// mode: 0 = prefetch abort, 1 = data abort
+void fault_handler(int mode) {
+    if (current_proc == NULL) {
+        os_uart_puts("[FAULT] no current process, halting\n");
+        while(1);
+    }
+
+    unsigned int ifsr = 0, dfsr = 0, far_val = 0;
+
+    if (mode == 0) {
+        // Prefetch abort: read IFSR 
+        __asm__ volatile("mrc p15, 0, %0, c5, c0, 1" : "=r"(ifsr));
+        current_proc->fault_type = FAULT_PREFETCH;
+        current_proc->fault_addr = current_proc->pc;
+    } else {
+        // Data abort: read DFSR (Data Fault Status Register) and FAR (Fault Address Register)
+        __asm__ volatile("mrc p15, 0, %0, c5, c0, 0" : "=r"(dfsr));
+        __asm__ volatile("mrc p15, 0, %0, c6, c0, 0" : "=r"(far_val));
+        current_proc->fault_addr = far_val;
+
+        // Combine bits [3:0] and bit [10] into a 5-bit fault status field 
+        unsigned int fs = (dfsr & 0xF) | ((dfsr >> 6) & 0x10);
+
+        switch (fs) {
+            case 0x00:
+                // Alignment fault 
+                current_proc->fault_type = FAULT_DATA_ALIGNMENT;
+                break;
+            case 0x01: case 0x02: case 0x03:
+            case 0x05: case 0x06: case 0x07:
+                // Translation / mapping fault — address has no valid page table entry
+                current_proc->fault_type = FAULT_DATA_INVALID;
+                break;
+            case 0x0D: case 0x0F:
+                // Permission fault — address mapped but USR mode not allowed to access it
+                current_proc->fault_type = FAULT_DATA_PERMISSION;
+                break;
+            default:
+                // Catch-all for any other DFSR code (external abort, parity, etc.)
+                current_proc->fault_type = FAULT_DATA_INVALID;
+                break;
+        }
+    }
+
+    current_proc->term_reason = TERM_FAULT;
+    current_proc->exit_code   = -1;
+    current_proc->state       = TERMINATED;
+
+    os_uart_puts("[FAULT] pid=");
+    os_uart_puts(" terminated\n");
+
+    schedule_next();
+}
+
+
+// Picks the next READY process and writes it into next_proc
+// Called after a fault or exit terminates the current process
+// Same round robin logic as the irq_handler scheduler
+void schedule_next(void) {
+    int current_idx = current_proc->pid - 1;
+    int num_procs = 2;
+    int next_idx = current_idx;
+
+    for (int i = 1; i <= num_procs; i++) {
+        int candidate = current_idx + i;
+        if (candidate >= num_procs)
+            candidate -= num_procs;
+        if (pcb_array[candidate].state != TERMINATED) {
+            next_idx = candidate;
+            break;
+        }
+    }
+
+    if (pcb_array[next_idx].state == TERMINATED) {
+        os_uart_puts("[SCHEDULER] All processes terminated.\n");
+        next_proc = current_proc;
+        return;
+    }
+
+    next_proc = &pcb_array[next_idx];
 }

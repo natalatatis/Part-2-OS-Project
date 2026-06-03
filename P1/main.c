@@ -29,12 +29,36 @@ int p1_main(void)
                 prints = 0;
                 total_cycles++;
 
-                /* Test SYS_WRITE */
-                int rc = sys_write(99, msg, sizeof(msg) - 1);
+                int rc = sys_write(1, msg, sizeof(msg) - 1); // should return positive
+               // int rc = sys_write(99, msg, sizeof(msg) - 1); // should return -2 
 
                 PRINT("sys_write returned %d\n", rc);
 
-                if (total_cycles >= 3)
+                if (total_cycles == 2)
+                {
+                    // ── TEST: DATA ABORT ──────────────────────────────────
+                    // Write to address 0x0 — valid kernel vector table area,
+                    // USR mode has no write permission → data abort
+                    PRINT("P1 triggering data abort...\n");
+                    volatile unsigned int *bad_ptr = (unsigned int *)0x00000000;
+                    *bad_ptr = 0xDEADBEEF;
+                    // Should never reach here — fault handler kills P1
+                    PRINT("P1 should not reach here\n");
+                }
+
+              /*  if (total_cycles == 3)
+                {
+                    // ── TEST: PREFETCH ABORT ──────────────────────────────
+                    // Jump to address 0xDEAD0000 — unmapped, no code there
+                    // CPU tries to fetch instruction → prefetch abort
+                    PRINT("P1 triggering prefetch abort...\n");
+                    void (*bad_func)(void) = (void (*)(void))0xDEAD0000;
+                    bad_func();
+                    // Should never reach here — fault handler kills P1
+                    PRINT("P1 should not reach here\n");
+                }*/
+
+                if (total_cycles >= 4)
                 {
                     PRINT("P1 exiting now...\n");
                     sys_exit(0);
