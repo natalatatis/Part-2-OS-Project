@@ -119,7 +119,7 @@ const os_api_t os_api_table = {
 };
 
 /* Function used to print addresses for debugging */
-static void print_dec(uint32_t v) {
+void print_dec(uint32_t v) {
     char buf[12];
     int i = 0;
     if (!v) {
