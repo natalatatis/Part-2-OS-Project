@@ -529,11 +529,88 @@ restore_process:
 // Exception stubs
 // ============================================================
 undefined_handler:
-    push {r0, lr}
-    ldr  r0, =msg_undef
+    sub  lr, lr, #4
+    stmfd sp!, {r0-r12, lr}
+
+    // Save context into current_proc 
+    ldr  r0, =current_proc
+    ldr  r0, [r0]
+    cmp  r0, #0
+    beq  .Lund_no_save
+
+    add  r2, r0, #PCB_R0
+    ldr r1, [sp, #0];  str r1, [r2, #0]
+    ldr r1, [sp, #4];  str r1, [r2, #4]
+    ldr r1, [sp, #8];  str r1, [r2, #8]
+    ldr r1, [sp, #12]; str r1, [r2, #12]
+    ldr r1, [sp, #16]; str r1, [r2, #16]
+    ldr r1, [sp, #20]; str r1, [r2, #20]
+    ldr r1, [sp, #24]; str r1, [r2, #24]
+    ldr r1, [sp, #28]; str r1, [r2, #28]
+    ldr r1, [sp, #32]; str r1, [r2, #32]
+    ldr r1, [sp, #36]; str r1, [r2, #36]
+    ldr r1, [sp, #40]; str r1, [r2, #40]
+    ldr r1, [sp, #44]; str r1, [r2, #44]
+    ldr r1, [sp, #48]; str r1, [r2, #48]
+
+    ldr  r1, [sp, #52]
+    str  r1, [r0, #PCB_PC]
+
+    mrs  r3, cpsr
+    bic  r2, r3, #0x1F
+    orr  r2, r2, #MODE_SYS
+    msr  cpsr_c, r2
+    str  sp, [r0, #PCB_SP]
+    str  lr, [r0, #PCB_LR]
+    msr  cpsr_c, r3
+
+    mrs  r1, spsr
+    str  r1, [r0, #PCB_CPSR]
+
+    // TRACE 6: USER_TO_KERNEL reason=fault type=undefined 
+    push {r0}
+    ldr  r0, =msg_u2k_prefix
     bl   os_uart_puts
-    pop  {r0, lr}
-    b hang
+    pop  {r0}
+    push {r0}
+    ldr  r0, [r0, #PCB_PID]
+    bl   print_dec
+    pop  {r0}
+    push {r0}
+    ldr  r0, =msg_reason_fault_undef
+    bl   os_uart_puts
+    pop  {r0}
+    // -----------------------------------------------------------
+
+.Lund_no_save:
+    // Call C fault classifier with mode=2 (undefined instruction)
+    and  r4, sp, #4
+    sub  sp, sp, r4
+    push {r4, lr}
+    mov  r0, #2
+    bl   fault_handler
+    pop  {r4, lr}
+    add  sp, sp, r4
+
+    // --- TRACE 7 ---
+    ldr  r0, =next_proc
+    ldr  r5, [r0]
+    push {r5}
+    ldr  r0, =msg_k2u_prefix
+    bl   os_uart_puts
+    pop  {r5}
+    push {r5}
+    ldr  r0, [r5, #PCB_PID]
+    bl   print_dec
+    pop  {r5}
+    push {r5}
+    ldr  r0, =msg_reason_fault_recovery
+    bl   os_uart_puts
+    pop  {r5}
+    // ---------------
+
+    add  sp, sp, #56
+    b    restore_process
 
 // ============================================================
 // prefetch_abort_handler — instruction fetch fault from USR
@@ -702,6 +779,7 @@ data_handler:
 
     add  sp, sp, #56
     b    restore_process
+
 fiq_handler:
     b hang
 
@@ -775,6 +853,9 @@ msg_reason_fault_data:
 msg_reason_fault_recovery:
     .asciz " reason=fault_recovery\n"
 
+msg_reason_fault_undef:
+    .asciz " reason=fault type=undefined\n"
+    
 // ============================================================
 // BSS — print_dec scratch buffer (11 bytes: max 10 digits + null)
 // ============================================================

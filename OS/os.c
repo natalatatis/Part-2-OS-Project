@@ -445,7 +445,7 @@ void fault_handler(int mode) {
         __asm__ volatile("mrc p15, 0, %0, c5, c0, 1" : "=r"(ifsr));
         current_proc->fault_type = FAULT_PREFETCH;
         current_proc->fault_addr = current_proc->pc;
-    } else {
+    } else if(mode == 1) {
         // Data abort: read DFSR (Data Fault Status Register) and FAR (Fault Address Register)
         __asm__ volatile("mrc p15, 0, %0, c5, c0, 0" : "=r"(dfsr));
         __asm__ volatile("mrc p15, 0, %0, c6, c0, 0" : "=r"(far_val));
@@ -473,6 +473,11 @@ void fault_handler(int mode) {
                 current_proc->fault_type = FAULT_DATA_INVALID;
                 break;
         }
+    }else if(mode == 2){
+    // Undefined instruction — no fault status register to read,
+    // the faulting PC is already saved by the handler above
+    current_proc->fault_type = FAULT_UNDEFINED;
+    current_proc->fault_addr = current_proc->pc;
     }
 
     current_proc->term_reason = TERM_FAULT;
@@ -480,6 +485,7 @@ void fault_handler(int mode) {
     current_proc->state       = TERMINATED;
 
     os_uart_puts("[FAULT] pid=");
+    print_dec(current_proc->pid);
     os_uart_puts(" terminated\n");
 
     schedule_next();
